@@ -31,3 +31,32 @@ The implemented database consists of 14 interconnected tables covering product a
 The project includes database table creation, integrity constraints, sample data, and 20 SQL queries.
 
 [View SQL Implementation](acme_database.sql)
+
+## Key SQL Applications & Business Value
+
+### 1. Configuration-Specific Documentation
+
+Developed a SQL query to retrieve the relevant instruction rows for a particular simulator release, including unconditional instructions and those matching selected configuration conditions.
+
+**Business value:** Supports the generation of configuration-specific documentation without maintaining a separate manual for every simulator variation.
+
+### 2. Document Version Control
+
+Used a correlated subquery to identify the latest approved version of each document, based on its version number and approval status.
+
+**Business value:** Helps teams identify the appropriate approved documentation and reduces reliance on manual version tracking.
+
+### 3. Quality Assurance & Testing
+
+Designed database structures to record test executions and associate testing outcomes with project configurations and document versions.
+
+**Business value:** Supports traceability and provides a foundation for monitoring testing results and identifying quality issues.
+
+## Key Takeaways
+
+- Translated operational requirements into a relational database design.
+- Applied normalization and integrity constraints to organize interconnected business data.
+- Developed SQL queries to support documentation retrieval and version management.
+- Connected technical database design decisions to operational needs such as consistency, traceability, and process efficiency.
+
+**Project context:** Developed collaboratively as part of a four-person team in McGill University's Master of Management in Analytics program, with contributions across business requirements analysis, database design, SQL implementation, and query development.
