@@ -1,0 +1,546 @@
+
+-- DDL - TABLE CREATION & CONSTRAINTS
+-- ------------------------------------------------------------
+
+DROP TABLE IF EXISTS TEST_EXECUTIONS;
+DROP TABLE IF EXISTS PROJECT_DEPLOYED_VERSIONS;
+DROP TABLE IF EXISTS CHANGE_LOGS;
+DROP TABLE IF EXISTS APPROVAL_TASKS;
+DROP TABLE IF EXISTS VERSION_ROWS;
+DROP TABLE IF EXISTS DOCUMENT_VERSIONS;
+DROP TABLE IF EXISTS DOCUMENTS;
+DROP TABLE IF EXISTS PROJECT_OPTION_SELECTIONS;
+DROP TABLE IF EXISTS PROJECTS;
+DROP TABLE IF EXISTS PLATFORM_OPTIONS;
+DROP TABLE IF EXISTS PLATFORMS;
+DROP TABLE IF EXISTS PRODUCT_OPTIONS;
+DROP TABLE IF EXISTS PRODUCTS;
+DROP TABLE IF EXISTS USERS;
+
+-- Create USERS Table
+CREATE TABLE USERS (
+    user_id INT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    role_name VARCHAR(30) NOT NULL CHECK (role_name IN ('Admin', 'Author', 'Reviewer', 'Tester', 'Client'))
+);
+
+-- Create PRODUCTS Table
+CREATE TABLE PRODUCTS (
+    product_id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    family VARCHAR(50) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    standard_ver VARCHAR(20) NOT NULL,
+    model_year INT NOT NULL,
+    product_type VARCHAR(20) NOT NULL CHECK (product_type IN ('Civil', 'Military')),
+    created_by INT NOT NULL,
+    created_on DATE NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('Active', 'Deprecated', 'Archived')),
+    FOREIGN KEY (created_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create PRODUCT_OPTIONS Table
+CREATE TABLE PRODUCT_OPTIONS (
+    product_option_id INT PRIMARY KEY AUTO_INCREMENT,
+    product_id VARCHAR(20) NOT NULL,
+    option_name VARCHAR(50) NOT NULL,
+    option_type VARCHAR(20) NOT NULL CHECK (option_type IN ('Enum', 'Boolean', 'Text')),
+    valid_values VARCHAR(255) NOT NULL,
+    FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Create PLATFORMS Table
+CREATE TABLE PLATFORMS (
+    platform_id VARCHAR(20) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    version VARCHAR(20) NOT NULL,
+    platform_year INT NOT NULL,
+    tech_level VARCHAR(20) NOT NULL CHECK (tech_level IN ('Low', 'Medium', 'High')),
+    support_4d VARCHAR(10) NOT NULL CHECK (support_4d IN ('Yes', 'No')),
+    platform_type VARCHAR(20) NOT NULL CHECK (platform_type IN ('Civil', 'Military')),
+    created_by INT NOT NULL,
+    created_on DATE NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('Active', 'Deprecated', 'Archived')),
+    FOREIGN KEY (created_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create PLATFORM_OPTIONS Table
+CREATE TABLE PLATFORM_OPTIONS (
+    platform_option_id INT PRIMARY KEY AUTO_INCREMENT,
+    platform_id VARCHAR(20) NOT NULL,
+    option_name VARCHAR(50) NOT NULL,
+    option_type VARCHAR(20) NOT NULL CHECK (option_type IN ('Enum', 'Boolean', 'Text')),
+    valid_values VARCHAR(255) NOT NULL,
+    FOREIGN KEY (platform_id) REFERENCES PLATFORMS(platform_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Create PROJECTS Table
+CREATE TABLE PROJECTS (
+    project_id VARCHAR(30) PRIMARY KEY,
+    project_name VARCHAR(150) NOT NULL,
+    client_name VARCHAR(100) NOT NULL,
+    product_id VARCHAR(20) NOT NULL,
+    platform_id VARCHAR(20) NOT NULL,
+    start_date DATE NOT NULL,
+    status VARCHAR(30) NOT NULL CHECK (status IN ('In Configuration', 'Active', 'Testing', 'Completed', 'Archived')),
+    created_by INT NOT NULL,
+    created_on DATE NOT NULL,
+    last_updated DATE,
+    FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (platform_id) REFERENCES PLATFORMS(platform_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create PROJECT_OPTION_SELECTIONS Table
+CREATE TABLE PROJECT_OPTION_SELECTIONS (
+    selection_id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id VARCHAR(30) NOT NULL,
+    option_source VARCHAR(20) NOT NULL CHECK (option_source IN ('Product', 'Platform')),
+    option_name VARCHAR(50) NOT NULL,
+    selected_value VARCHAR(100) NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES PROJECTS(project_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Create DOCUMENTS Table
+CREATE TABLE DOCUMENTS (
+    doc_id VARCHAR(20) PRIMARY KEY,
+    doc_name VARCHAR(150) NOT NULL,
+    description TEXT,
+    target_type VARCHAR(20) NOT NULL CHECK (target_type IN ('Product', 'Platform')),
+    product_id VARCHAR(20),
+    platform_id VARCHAR(20),
+    created_at DATE NOT NULL,
+    created_by INT NOT NULL,
+    is_locked INT DEFAULT 0 CHECK (is_locked IN (0, 1)),
+    locked_by INT,
+    FOREIGN KEY (product_id) REFERENCES PRODUCTS(product_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (platform_id) REFERENCES PLATFORMS(platform_id) ON DELETE SET NULL ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (locked_by) REFERENCES USERS(user_id) ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- Create DOCUMENT_VERSIONS Table
+CREATE TABLE DOCUMENT_VERSIONS (
+    version_id INT PRIMARY KEY AUTO_INCREMENT,
+    doc_id VARCHAR(20) NOT NULL,
+    version_number INT NOT NULL,
+    version_tag VARCHAR(30) NOT NULL,
+    release_id VARCHAR(30) UNIQUE,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('Draft', 'Pending Approval', 'Approved', 'Rejected')),
+    created_by INT NOT NULL,
+    created_at DATE NOT NULL,
+    FOREIGN KEY (doc_id) REFERENCES DOCUMENTS(doc_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create VERSION_ROWS Table
+CREATE TABLE VERSION_ROWS (
+    row_pk INT PRIMARY KEY AUTO_INCREMENT,
+    version_id INT NOT NULL,
+    row_id VARCHAR(20) NOT NULL,
+    row_order INT NOT NULL,
+    row_type VARCHAR(20) NOT NULL CHECK (row_type IN ('H1', 'H2', 'H3', 'TEXT', 'ACTION')),
+    content TEXT NOT NULL,
+    observation TEXT,
+    condition_expr VARCHAR(255),
+    comment TEXT,
+    FOREIGN KEY (version_id) REFERENCES DOCUMENT_VERSIONS(version_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Create APPROVAL_TASKS Table
+CREATE TABLE APPROVAL_TASKS (
+    task_id INT PRIMARY KEY AUTO_INCREMENT,
+    version_id INT NOT NULL,
+    reviewer_id INT NOT NULL,
+    approval_status VARCHAR(20) NOT NULL CHECK (approval_status IN ('Pending', 'Approved', 'Rejected')),
+    review_comments TEXT,
+    reviewed_at DATE,
+    FOREIGN KEY (version_id) REFERENCES DOCUMENT_VERSIONS(version_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (reviewer_id) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create CHANGE_LOGS Table
+CREATE TABLE CHANGE_LOGS (
+    log_id INT PRIMARY KEY AUTO_INCREMENT,
+    version_id INT NOT NULL,
+    operation_type VARCHAR(20) NOT NULL CHECK (operation_type IN ('ADD_ROW', 'EDIT_ROW', 'DELETE_ROW', 'REORDER')),
+    row_id VARCHAR(20) NOT NULL,
+    performed_by INT NOT NULL,
+    performed_at DATE NOT NULL,
+    details TEXT,
+    FOREIGN KEY (version_id) REFERENCES DOCUMENT_VERSIONS(version_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (performed_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- Create PROJECT_DEPLOYED_VERSIONS Table
+CREATE TABLE PROJECT_DEPLOYED_VERSIONS (
+    project_id VARCHAR(30) NOT NULL,
+    version_id INT NOT NULL,
+    PRIMARY KEY (project_id, version_id),
+    FOREIGN KEY (project_id) REFERENCES PROJECTS(project_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (version_id) REFERENCES DOCUMENT_VERSIONS(version_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- Create TEST_EXECUTIONS Table
+CREATE TABLE TEST_EXECUTIONS (
+    test_id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id VARCHAR(30) NOT NULL,
+    version_id INT NOT NULL,
+    row_pk INT NOT NULL,
+    phase VARCHAR(20) NOT NULL CHECK (phase IN ('Company', 'Client')),
+    step_description TEXT NOT NULL,
+    expected_observation TEXT,
+    result VARCHAR(10) NOT NULL CHECK (result IN ('Pass', 'Fail', 'N/A')),
+    executed_by INT NOT NULL,
+    execution_date DATE NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES PROJECTS(project_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (version_id) REFERENCES DOCUMENT_VERSIONS(version_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (row_pk) REFERENCES VERSION_ROWS(row_pk) ON DELETE RESTRICT ON UPDATE CASCADE,
+    FOREIGN KEY (executed_by) REFERENCES USERS(user_id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+
+-- DATA INSERTION (Populating ACME Context Data)
+-- ---------------------------------------------------------
+
+-- Insert USERS (Authors, Admins, Reviewers, Testers)
+INSERT INTO USERS (user_id, username, full_name, email, role_name) VALUES
+(1, 'jsmith', 'John Smith', 'john.smith@acme.com', 'Author'),
+(2, 'mgomez', 'Maria Gomez', 'maria.gomez@acme.com', 'Admin'),
+(3, 'tgreen', 'Tom Green', 'tom.green@acme.com', 'Author'),
+(4, 'akumar', 'Anil Kumar', 'anil.kumar@acme.com', 'Reviewer'),
+(5, 'anguyen', 'Alice Nguyen', 'alice.nguyen@acme.com', 'Author'),
+(6, 'autotech', 'AutoTech Tester', 'tester@autotech.ca', 'Tester');
+
+-- Insert PRODUCTS
+INSERT INTO PRODUCTS (product_id, name, family, type, standard_ver, model_year, product_type, created_by, created_on, status) VALUES
+('P001', 'Honda CRV Sim 2019', 'Honda', 'SUV', '2.1', 2019, 'Civil', 1, '2024-11-12', 'Active'),
+('P002', 'Toyota Prius 2021', 'Toyota', 'Hatchback', '30', 2021, 'Civil', 2, '2024-12-03', 'Active'),
+('P003', 'Humvee Tactical 2020', 'AM General', 'Military Vehicle', '13', 2020, 'Military', 3, '2025-01-21', 'Archived'),
+('P004', 'Audi Q7 Sim 2022', 'Audi', 'SUV', '4.0', 2022, 'Civil', 4, '2025-02-11', 'Active'),
+('P005', 'Ford Mustang 2018', 'Ford', 'Sports Car', '18', 2018, 'Civil', 1, '2023-09-19', 'Deprecated');
+
+-- Insert PRODUCT_OPTIONS
+INSERT INTO PRODUCT_OPTIONS (product_id, option_name, option_type, valid_values) VALUES
+('P001', 'Engine', 'Enum', 'gas, hybrid, electric'),
+('P001', 'Transmission', 'Enum', 'automatic, manual'),
+('P001', 'AC', 'Boolean', 'true, false'),
+('P001', 'Seat Material', 'Enum', 'leather, fabric'),
+('P001', 'Infotainment', 'Enum', 'basic, advanced'),
+('P001', 'Color', 'Text', 'Any string (e.g., Red, Gray)');
+
+-- Insert PLATFORMS
+INSERT INTO PLATFORMS (platform_id, name, version, platform_year, tech_level, support_4d, platform_type, created_by, created_on, status) VALUES
+('PLT001', 'ACME SimCore Base', '1.0', 2020, 'Low', 'No', 'Civil', 1, '2024-01-10', 'Active'),
+('PLT002', 'ACME SimCare Pro', '2.0', 2021, 'High', 'Yes', 'Civil', 4, '2025-01-05', 'Active'),
+('PLT003', 'SimPlatform 4D', '2.1', 2022, 'High', 'Yes', 'Civil', 2, '2025-01-15', 'Active'),
+('PLT004', 'Military Rig Elite', '3.5', 2023, 'High', 'Yes', 'Military', 3, '2025-02-01', 'Active'),
+('PLT005', 'Basic Fleet Trainer', '1.2', 2019, 'Low', 'No', 'Civil', 1, '2023-05-12', 'Deprecated');
+
+-- Insert PLATFORM_OPTIONS
+INSERT INTO PLATFORM_OPTIONS (platform_id, option_name, option_type, valid_values) VALUES
+('PLT002', '4D', 'Boolean', 'true, false'),
+('PLT002', 'Tech Level', 'Enum', 'low, medium, high'),
+('PLT002', 'Language Pack', 'Enum', 'en-US, fr-CA, de-DE'),
+('PLT002', 'Motion Platform', 'Boolean', 'true, false');
+
+-- Insert PROJECTS
+INSERT INTO PROJECTS (project_id, project_name, client_name, product_id, platform_id, start_date, status, created_by, created_on, last_updated) VALUES
+('PRO_2025_0731', 'Red Arrow Hybrid Training System', 'Red Arrow Automotive Ltd.', 'P001', 'PLT002', '2025-07-31', 'In Configuration', 1, '2025-07-31', '2025-08-02'),
+('SIM-CRV-000', 'Baseline CRV Project', 'ACME Internal', 'P001', 'PLT001', '2025-06-01', 'Completed', 1, '2025-06-01', '2025-06-10'),
+('SIM-CRV-001', 'CRV Hybrid Fleet Deployment', 'Commercial Fleet Co.', 'P001', 'PLT002', '2025-07-01', 'Testing', 5, '2025-07-01', '2025-07-20'),
+('SIM-CRV-002', 'CRV Gas Setup Project', 'Urban Taxi Fleet', 'P001', 'PLT001', '2025-07-10', 'Active', 1, '2025-07-10', '2025-07-15'),
+('SIM-CRV-003', 'AutoTech Canada CRV 4D Sim', 'AutoTech Canada', 'P001', 'PLT003', '2025-07-18', 'Testing', 5, '2025-07-18', '2025-08-01');
+
+-- Insert PROJECT_OPTION_SELECTIONS
+INSERT INTO PROJECT_OPTION_SELECTIONS (project_id, option_source, option_name, selected_value) VALUES
+('PRO_2025_0731', 'Product', 'Engine', 'hybrid'),
+('PRO_2025_0731', 'Product', 'Transmission', 'automatic'),
+('PRO_2025_0731', 'Product', 'AC', 'true'),
+('PRO_2025_0731', 'Product', 'Seat Material', 'leather'),
+('PRO_2025_0731', 'Product', 'Infotainment', 'advanced'),
+('PRO_2025_0731', 'Product', 'Color', 'Red'),
+('PRO_2025_0731', 'Platform', '4D', 'true'),
+('PRO_2025_0731', 'Platform', 'Tech Level', 'high'),
+('PRO_2025_0731', 'Platform', 'Language Pack', 'en-US'),
+('PRO_2025_0731', 'Platform', 'Motion Platform', 'true'),
+('SIM-CRV-003', 'Product', 'Engine', 'hybrid'),
+('SIM-CRV-003', 'Platform', '4D', 'true');
+
+-- Insert DOCUMENTS
+INSERT INTO DOCUMENTS (doc_id, doc_name, description, target_type, product_id, platform_id, created_at, created_by, is_locked, locked_by) VALUES
+('ENG-01', 'Engine Start & Diagnostics', 'Procedures for ignition, hybrid/gas modes, and diagnostics', 'Product', 'P001', NULL, '2025-07-18', 5, 0, NULL),
+('CLI-02', 'Climate Control System', 'AC and airflow testing instructions', 'Product', 'P001', NULL, '2025-07-12', 1, 0, NULL),
+('SAFE-03', 'Safety Checks', 'Standard safety checklist and hazard protocols', 'Product', 'P001', NULL, '2025-07-16', 5, 0, NULL),
+('PLT-DOC-01', 'SimPlatform Core Calibration', 'Motion platform baseline startup and diagnostics', 'Platform', NULL, 'PLT002', '2025-01-20', 4, 0, NULL),
+('PLT-DOC-02', '4D Sensor Rig Setup', 'Alignment instructions for 4D effects transducers', 'Platform', NULL, 'PLT003', '2025-02-01', 2, 0, NULL);
+
+-- Insert DOCUMENT_VERSIONS
+INSERT INTO DOCUMENT_VERSIONS (version_id, doc_id, version_number, version_tag, release_id, status, created_by, created_at) VALUES
+(1, 'ENG-01', 0, 'V0-ENG-01', 'R0-ENG-01', 'Approved', 1, '2025-06-30'),
+(2, 'ENG-01', 1, 'V1-ENG-01', NULL, 'Rejected', 1, '2025-07-07'),
+(3, 'ENG-01', 2, 'V2-ENG-01', 'R2-ENG-01', 'Approved', 5, '2025-07-12'),
+(4, 'ENG-01', 3, 'V3-ENG-01', 'R3-ENG-01', 'Approved', 5, '2025-07-18'),
+(5, 'CLI-02', 1, 'V1-CLI-02', 'R1-CLI-02', 'Approved', 1, '2025-07-12');
+
+-- Insert PROJECT_DEPLOYED_VERSIONS
+INSERT INTO PROJECT_DEPLOYED_VERSIONS (project_id, version_id) VALUES
+('SIM-CRV-000', 1),
+('SIM-CRV-002', 3),
+('SIM-CRV-001', 4),
+('SIM-CRV-003', 4),
+('PRO_2025_0731', 4);
+
+-- Insert VERSION_ROWS for ENG-01 Version 3
+INSERT INTO VERSION_ROWS (version_id, row_id, row_order, row_type, content, observation, condition_expr, comment) VALUES
+(4, '101', 1000, 'H1', 'Engine Start Procedure', NULL, NULL, NULL),
+(4, 'r102', 2000, 'TEXT', 'Turn the ignition key to ON position', NULL, NULL, 'User must wait 2 seconds.'),
+(4, '1103', 3000, 'ACTION', 'Check dashboard for battery indicator light', 'Should illuminate', NULL, NULL),
+(4, '104', 4000, 'ACTION', 'Start vehicle with hybrid system', 'Hybrid system initializes correctly', 'Engine=''hybrid''', NULL),
+(4, '105', 5000, 'ACTION', 'Start vehicle with fuel injection', 'Fuel injection system activates', 'Engine=''gas''', NULL),
+(4, '106', 6000, 'H2', 'Ignition Feedback Sensors', NULL, NULL, 'Section added recently'),
+(4, '107', 7000, 'TEXT', 'Observe indicator light behavior post-start', NULL, NULL, 'Confirm light turns off.'),
+(4, '108', 8000, 'H1', 'Diagnostics', NULL, NULL, NULL),
+(4, 'r109', 9000, 'TEXT', 'Run onboard diagnostics', NULL, NULL, 'Technician access only.'),
+(4, '110', 10000, 'ACTION', 'Run 4D sensor calibration utility', 'Calibration successful', '$4D=true$', 'Take backup first'),
+(4, '1111', 11000, 'ACTION', 'Run tech-level 3 diagnostics package', 'All tests pass in high-tier diagnostics', 'Tech Level=''high''', NULL),
+(4, '112', 12000, 'ACTION', 'Run minimal diagnostics package', 'Basic checks complete', 'Tech Level=''low''', NULL);
+
+-- Insert APPROVAL_TASKS
+INSERT INTO APPROVAL_TASKS (version_id, reviewer_id, approval_status, review_comments, reviewed_at) VALUES
+(1, 2, 'Approved', 'Baseline version verified.', '2025-06-30'),
+(2, 4, 'Rejected', 'Missing critical hybrid safety steps.', '2025-07-08'),
+(3, 4, 'Approved', 'Updated steps reviewed and verified.', '2025-07-12'),
+(4, 2, 'Approved', 'Includes 4D calibration utility rows. Excellent.', '2025-07-18'),
+(5, 4, 'Approved', 'Climate control checks pass review.', '2025-07-13');
+
+-- Insert CHANGE_LOGS
+INSERT INTO CHANGE_LOGS (version_id, operation_type, row_id, performed_by, performed_at, details) VALUES
+(4, 'ADD_ROW', '110', 5, '2025-07-17', 'Added 4D sensor calibration action line'),
+(4, 'ADD_ROW', '1111', 5, '2025-07-17', 'Added high-tier diagnostics action line'),
+(4, 'EDIT_ROW', '104', 5, '2025-07-18', 'Updated expected observation text'),
+(4, 'REORDER', '106', 5, '2025-07-18', 'Shifted H2 heading position to 6000'),
+(2, 'ADD_ROW', 'r102', 1, '2025-07-06', 'Initial draft insertion');
+
+-- Insert TEST_EXECUTIONS
+INSERT INTO TEST_EXECUTIONS (project_id, version_id, row_pk, phase, step_description, expected_observation, result, executed_by, execution_date) VALUES
+('SIM-CRV-003', 4, 2, 'Company', 'Turn ignition to ON', 'Engine dashboard lights should appear', 'Pass', 5, '2025-07-20'),
+('SIM-CRV-003', 4, 3, 'Company', 'Wait 5 seconds and check fuel signal', 'Green "Ready" signal appears', 'Pass', 5, '2025-07-20'),
+('SIM-CRV-003', 4, 4, 'Company', 'Press hybrid diagnostics button', 'Display shows battery and engine health', 'Pass', 5, '2025-07-20'),
+('SIM-CRV-003', 4, 2, 'Client', 'Turn ignition to ON', 'Engine dashboard lights should appear', 'Pass', 6, '2025-07-25'),
+('SIM-CRV-003', 4, 3, 'Client', 'Wait 5 seconds and check fuel signal', 'Green "Ready" signal appears', 'Fail', 6, '2025-07-25'),
+('SIM-CRV-003', 4, 4, 'Client', 'Press hybrid diagnostics button', 'Display shows battery and engine health', 'N/A', 6, '2025-07-25');
+
+
+
+  -- 20 SQL QUERIES
+-- -------------------------------------------------------------
+
+-- Query 1: Simple SELECT - Retrieve all active Civil products
+-- Objective: Filter active product offerings in the civil driving simulation space.
+SELECT product_id, name, family, model_year, standard_ver 
+FROM PRODUCTS 
+WHERE product_type = 'Civil' AND status = 'Active';
+
+
+-- Query 2: Filtering with Range & Sorting - High-technology platforms
+-- Objective: Identify simulator platforms released in or after 2021 with High tech level.
+SELECT platform_id, name, version, platform_year, support_4d 
+FROM PLATFORMS 
+WHERE platform_year >= 2021 AND tech_level = 'High'
+ORDER BY platform_year DESC;
+
+
+-- Query 3: Multi-Table Join - Complete list of projects with Product and Platform names
+-- Objective: Executive listing showing client projects along with assigned vehicle models and platforms.
+SELECT p.project_id, p.project_name, p.client_name, 
+       prod.name AS assigned_product, 
+       plat.name AS assigned_platform, 
+       p.status
+FROM PROJECTS p
+JOIN PRODUCTS prod ON p.product_id = prod.product_id
+JOIN PLATFORMS plat ON p.platform_id = plat.platform_id;
+
+
+-- Query 4: Aggregate Function - Count of document versions by release status
+-- Objective: Summarize version counts across life cycle states (Approved, Draft, Rejected).
+SELECT status, COUNT(version_id) AS total_versions
+FROM DOCUMENT_VERSIONS
+GROUP BY status;
+
+
+-- Query 5: INNER JOIN with Filtering - Detailed Project Handbook Configuration Options
+-- Objective: Retrieve all configured option selections for project 'PRO_2025_0731'.
+SELECT pos.project_id, p.project_name, pos.option_source, pos.option_name, pos.selected_value
+FROM PROJECT_OPTION_SELECTIONS pos
+JOIN PROJECTS p ON pos.project_id = p.project_id
+WHERE pos.project_id = 'PRO_2025_0731'
+ORDER BY pos.option_source, pos.option_name;
+
+
+-- Query 6: Document Versioning Lineage Join - Documents and their Approved Release IDs
+-- Objective: Show all documents, their published release IDs, and authors.
+SELECT d.doc_id, d.doc_name, dv.version_tag, dv.release_id, u.full_name AS author_name
+FROM DOCUMENTS d
+JOIN DOCUMENT_VERSIONS dv ON d.doc_id = dv.doc_id
+JOIN USERS u ON dv.created_by = u.user_id
+WHERE dv.status = 'Approved';
+
+
+-- Query 7: Conditional Handbook Generator - Filter ENG-01 Document Rows for Hybrid + 4D Setup
+-- Objective: Dynamic evaluation simulator generating printable handbook content for a Hybrid, 4D project.
+SELECT r.row_order, r.row_id, r.row_type, r.content, r.observation, r.condition_expr
+FROM VERSION_ROWS r
+JOIN DOCUMENT_VERSIONS dv ON r.version_id = dv.version_id
+WHERE dv.release_id = 'R3-ENG-01'
+  AND (r.condition_expr IS NULL 
+       OR r.condition_expr = 'Engine=''hybrid''' 
+       OR r.condition_expr = '$4D=true$')
+ORDER BY r.row_order ASC;
+
+
+-- Query 8: Grouping & Aggregate - Number of Documents authored per User
+-- Objective: Identify author productivity across the engineering documentation team.
+SELECT u.user_id, u.full_name, COUNT(d.doc_id) AS documents_authored
+FROM USERS u
+LEFT JOIN DOCUMENTS d ON u.user_id = d.created_by
+WHERE u.role_name IN ('Author', 'Admin')
+GROUP BY u.user_id, u.full_name;
+
+
+-- Query 9: Subquery in WHERE - Documents that have no approved release
+-- Objective: Uncover stagnant or unapproved documents requiring review attention.
+SELECT doc_id, doc_name, created_at 
+FROM DOCUMENTS 
+WHERE doc_id NOT IN (
+    SELECT DISTINCT doc_id 
+    FROM DOCUMENT_VERSIONS 
+    WHERE status = 'Approved'
+);
+
+
+-- Query 10: Multi-Table Audit Join - Line-by-line Change Log for Document Versioning
+-- Objective: Trace change activity for Version 3 of ENG-01 including user signatures.
+SELECT cl.log_id, dv.version_tag, cl.operation_type, cl.row_id, cl.details, u.full_name AS modifier, cl.performed_at
+FROM CHANGE_LOGS cl
+JOIN DOCUMENT_VERSIONS dv ON cl.version_id = dv.version_id
+JOIN USERS u ON cl.performed_by = u.user_id
+WHERE dv.version_tag = 'V3-ENG-01'
+ORDER BY cl.performed_at DESC;
+
+
+-- Query 11: Test Results Summary by Phase for Project 'SIM-CRV-003'
+-- Objective: Calculate total passes, fails, and N/A steps split between Company and Client testing.
+SELECT phase,
+       SUM(CASE WHEN result = 'Pass' THEN 1 ELSE 0 END) AS pass_count,
+       SUM(CASE WHEN result = 'Fail' THEN 1 ELSE 0 END) AS fail_count,
+       SUM(CASE WHEN result = 'N/A' THEN 1 ELSE 0 END) AS na_count,
+       COUNT(*) AS total_steps_executed
+FROM TEST_EXECUTIONS
+WHERE project_id = 'SIM-CRV-003'
+GROUP BY phase;
+
+
+-- Query 12: Subquery with Aggregate Comparison - Projects with above-average option count
+-- Objective: Find highly customized projects that have configured more options than average.
+SELECT project_id, COUNT(selection_id) AS configured_options_count
+FROM PROJECT_OPTION_SELECTIONS
+GROUP BY project_id
+HAVING COUNT(selection_id) > (
+    SELECT AVG(opt_count) 
+    FROM (
+        SELECT COUNT(selection_id) AS opt_count 
+        FROM PROJECT_OPTION_SELECTIONS 
+        GROUP BY project_id
+    ) AS sub
+);
+
+
+-- Query 13: LEFT JOIN - Products and their assigned Document counts
+-- Objective: Audit coverage to ensure every vehicle model has associated documentation.
+SELECT p.product_id, p.name AS product_name, COUNT(d.doc_id) AS document_count
+FROM PRODUCTS p
+LEFT JOIN DOCUMENTS d ON p.product_id = d.product_id
+GROUP BY p.product_id, p.name;
+
+
+-- Query 14: Approval Workflow Status Matrix
+-- Objective: Comprehensive review task status report listing reviewer, version tag, and comments.
+SELECT t.task_id, dv.version_tag, u.full_name AS reviewer, t.approval_status, t.review_comments, t.reviewed_at
+FROM APPROVAL_TASKS t
+JOIN DOCUMENT_VERSIONS dv ON t.version_id = dv.version_id
+JOIN USERS u ON t.reviewer_id = u.user_id;
+
+
+-- Query 15: Deployed Release Versions across Active Projects
+-- Objective: Map client projects to exact document versions currently deployed in production.
+SELECT pdv.project_id, pr.client_name, d.doc_name, dv.version_tag, dv.release_id
+FROM PROJECT_DEPLOYED_VERSIONS pdv
+JOIN PROJECTS pr ON pdv.project_id = pr.project_id
+JOIN DOCUMENT_VERSIONS dv ON pdv.version_id = dv.version_id
+JOIN DOCUMENTS d ON dv.doc_id = d.doc_id;
+
+
+-- Query 16: Failure Analysis Report - Failed Client Test Executions
+-- Objective: Identify critical failure points during client acceptance testing for quick remediation.
+SELECT te.test_id, te.project_id, te.step_description, te.expected_observation, u.full_name AS tester
+FROM TEST_EXECUTIONS te
+JOIN USERS u ON te.executed_by = u.user_id
+WHERE te.phase = 'Client' AND te.result = 'Fail';
+
+
+-- Query 17: Union Query - Complete Document & Project Lifecycle Timeline
+-- Objective: Consolidated chronological feed of major system milestones.
+SELECT created_on AS activity_date, 'Project Created' AS activity_type, project_name AS entity_name
+FROM PROJECTS
+UNION ALL
+SELECT created_at AS activity_date, 'Document Uploaded' AS activity_type, doc_name AS entity_name
+FROM DOCUMENTS
+UNION ALL
+SELECT execution_date AS activity_date, 'Test Conducted' AS activity_type, step_description AS entity_name
+FROM TEST_EXECUTIONS
+ORDER BY activity_date DESC;
+
+
+-- Query 18: Self-Join - Find Authors sharing the exact same role as 'John Smith'
+-- Objective: Locate team peers with identical system privileges.
+SELECT u1.user_id, u1.full_name, u1.email, u1.role_name
+FROM USERS u1
+JOIN USERS u2 ON u1.role_name = u2.role_name
+WHERE u2.username = 'jsmith' AND u1.username <> 'jsmith';
+
+
+-- Query 19: Correlated Subquery - Latest Approved Version per Document
+-- Objective: Fetch the highest approved version number for each document in the catalog.
+SELECT v1.doc_id, v1.version_tag, v1.release_id, v1.version_number
+FROM DOCUMENT_VERSIONS v1
+WHERE v1.status = 'Approved'
+  AND v1.version_number = (
+      SELECT MAX(v2.version_number)
+      FROM DOCUMENT_VERSIONS v2
+      WHERE v2.doc_id = v1.doc_id AND v2.status = 'Approved'
+  );
+
+
+-- Query 20: Complex Cross-Domain Audit Query - Failed Step Lineage
+-- Objective: Full traceability report connecting project, vehicle, platform, failing row, and tester.
+SELECT pr.project_id, 
+       pr.client_name, 
+       prod.name AS vehicle_model, 
+       plat.name AS platform_model, 
+       dv.release_id, 
+       vr.row_id, 
+       te.step_description, 
+       te.result, 
+       u.full_name AS executed_by_user
+FROM TEST_EXECUTIONS te
+JOIN PROJECTS pr ON te.project_id = pr.project_id
+JOIN PRODUCTS prod ON pr.product_id = prod.product_id
+JOIN PLATFORMS plat ON pr.platform_id = plat.platform_id
+JOIN VERSION_ROWS vr ON te.row_pk = vr.row_pk
+JOIN DOCUMENT_VERSIONS dv ON vr.version_id = dv.version_id
+JOIN USERS u ON te.executed_by = u.user_id
+WHERE te.result = 'Fail';
+ 
